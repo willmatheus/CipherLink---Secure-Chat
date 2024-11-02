@@ -9,3 +9,6 @@ Flask-Migrate
 requests
 pycryptodome
 python-socketio
+requests
+python-socketio
+websocket-client
