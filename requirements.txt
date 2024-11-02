@@ -1,0 +1,11 @@
+Flask
+Flask-SocketIO
+Flask-SQLAlchemy
+cryptography
+PyCryptodome
+psycopg2
+Flask-SocketIO
+Flask-Migrate
+requests
+pycryptodome
+python-socketio
