@@ -8,7 +8,7 @@ from user_models import User
 from message_models import Message
 from Crypto.Random import get_random_bytes
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from config import *
 
@@ -49,7 +49,7 @@ def add_user(username, password_hash, public_key):
 
 def clean_expired_messages():
     with app.app_context():
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         expired_messages = Message.query.filter(
             (now - Message.timestamp) > Message.duration
@@ -82,8 +82,9 @@ def register():
     username = data['username']
     password = data['password']
     public_key = data['public_key']
-
     password_hash = generate_password_hash(password)
+    if User.query.filter_by(username=username).first():
+        return jsonify({'message': 'User already exists'}), 401
     user = User(username=username, password_hash=password_hash, public_key=public_key)
     db.session.add(user)
     db.session.commit()
@@ -107,6 +108,7 @@ def login():
     return jsonify({'message': 'Invalid credentials'}), 401
 
 
+
 @socketio.on('connect')
 def handle_connect():
     sid = request.headers['sid']
@@ -121,6 +123,28 @@ def handle_disconnect():
 
     print(f"User with session id {sid} disconnected.")
     print(clients)
+
+@app.route('/user', methods=['POST'])
+def add_user_in_friendlist():
+    username = request.json['username']
+    user_name_to_add = request.json['username_to_add']
+    user = User.query.filter_by(username=username).first()
+    user_name_to_add = User.query.filter_by(username=user_name_to_add).first().get_username()
+    if user_name_to_add:
+        user.add_user_to_friendlist(user_name_to_add)
+        db.session.commit()
+        return jsonify({'message': 'User successfully added', 'User added': user_name_to_add}), 200
+    return jsonify({'message': 'User not founded'}), 401
+
+
+@app.route('/frienlist', methods=['POST'])
+def is_user_in_friendlist():
+    username = request.json['username']
+    username_to_talk = request.json['username_to_talk']
+    user_friend_list = User.query.filter_by(username=username).first().get_friend_list()
+    if username_to_talk in user_friend_list:
+        return jsonify({'status': True}), 200
+    return jsonify({'message': 'User not found'}), 404
 
 
 @app.route('/get_public_key/<username>', methods=['GET'])

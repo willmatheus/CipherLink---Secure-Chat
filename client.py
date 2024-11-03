@@ -44,6 +44,27 @@ def register_user(username, password):
     return response.ok
 
 
+
+def add_user_in_friendlist(username, username_to_add):
+    response = requests.post('http://localhost:5000/user', json={
+        'username': username,
+        'username_to_add': username_to_add
+    })
+    if response.ok:
+        print("Usuario adicionado com sucesso")
+    else:
+        print("Usuario nao encontrado")
+
+
+def is_user_in_friendlist(username, username_to_talk):
+    response = requests.post('http://localhost:5000/frienlist', json={
+        'username': username,
+        'username_to_talk': username_to_talk
+    })
+    if response.ok:
+        return True
+    return False
+
 # Disparar evento de início de sessão via SocketIO
 def start_session(username_a, username_b):
     sio.emit('start_session', {'username_a': username_a, 'username_b': username_b})
@@ -79,6 +100,7 @@ def handle_receive_message(data):
         print(f"Mensagem recebida: {message}")
 
 
+
 def login_user(username, password, sid):
     response = requests.post('http://localhost:5000/login', json={
         'username': username,
@@ -91,37 +113,50 @@ def login_user(username, password, sid):
     print("Falha no login.")
     return False
 
-
 # Função principal para execução do chat
 def run_chat():
     # Conectar ao servidor SocketIO
     sid = str(random.getrandbits(128))
     sio.connect('http://localhost:5000/login', headers={'sid': sid})
-    username = input("Digite seu nome de usuário: ")
-    password = input("Digite sua senha: ")
 
-    # Registrar ou logar usuário
-    if True: #not register_user(username, password):
+    print("Deseja logar (l) ou se registrar (r)")
+    option = input()
+    if option == "r":
+        username = input("Digite seu nome de usuário: ")
+        password = input("Digite sua senha: ")
+        register_user(username, password)
+    if option == "l":
+        username = input("Digite seu nome de usuário: ")
+        password = input("Digite sua senha: ")
         login_success = login_user(username, password, sid)
+
         if not login_success:
-            print("Não foi possível fazer login.")
             return
 
-    # Solicitar nome de usuário do destinatário
-    recipient = input("Digite o nome de usuário do destinatário: ")
+        print("Voce deseja:"
+              "\n1 - Adicionar um usuario\n"
+              "\n2 - Conversar com um usuario na sua lista de amigos\n")
+        choice = int(input("Digite sua opcao: "))
 
-    # Iniciar sessão de comunicação
-    start_session(username, recipient)
+        if choice == 1:
+            user_to_add = input("Digite o nome do usuario: ")
+            add_user_in_friendlist(username, user_to_add)
+        if choice == 2:
+            user_to_talk = input("Digite o nome do usuario da lista de amigos que voce quer conversar: ")
+            if not is_user_in_friendlist(username, user_to_talk):
+                return
 
-    # Esperar pela confirmação da sessão antes de enviar mensagens
-    print("Envie suas mensagens. Digite 'sair' para encerrar.")
-    while True:
-        message = input("Você: ")
-        if message.lower() == "sair":
-            print("Encerrando o chat.")
-            break
-        send_message(username, recipient, message)
+            # Iniciar sessão de comunicação
+            start_session(username, user_to_talk)
 
+            # Esperar pela confirmação da sessão antes de enviar mensagens
+            print("Envie suas mensagens. Digite 'sair' para encerrar.")
+            while True:
+                message = input("Você: ")
+                if message.lower() == "sair":
+                    print("Encerrando o chat.")
+                    break
+                send_message(username, user_to_talk, message)
     # Desconectar do servidor
     sio.disconnect()
 
