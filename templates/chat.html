@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat de Mensagens</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='Chat/styles.css') }}">
+</head>
+
+<body>
+    <div class="chat-container">
+        <aside class="contact-list">
+            <h2>Contatos</h2>
+            <input type="text" id="searchInput" placeholder="Pesquisar usuário..." autocomplete="off">
+            <ul id="searchResults"></ul>
+            <ul id="contactsList">
+                <!-- Contatos existentes serão exibidos aqui -->
+            </ul>
+            <button id="addContactButton">Adicionar Contato</button>
+        </aside>
+
+
+
+        <main class="chat">
+            <header class="chat-header">
+                <h2 id="chatHeader">Conversa com Gabriel</h2>
+                <button id="logoutButton">Logout</button> <!-- Botão de Logout -->
+            </header>
+
+            <div class="chat-body" id="chatBody">
+                <!-- Mensagens aparecerão aqui -->
+            </div>
+
+            <footer class="chat-footer">
+                <input type="text" id="messageInput" placeholder="Digite sua mensagem...">
+                <button id="sendButton">Enviar</button>
+            </footer>
+        </main>
+    </div>
+
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='Chat/script.js') }}"></script>
+</body>
+
+</html>

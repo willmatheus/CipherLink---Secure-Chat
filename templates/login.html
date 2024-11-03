@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login e Cadastro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='Login_Cadastro/styles.css') }}">
+</head>
+
+<body>
+    <!-- Tela de Login -->
+    <div id="loginScreen" class="screen">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <input type="text" id="loginUsername" placeholder="Nome de usuário" required>
+            <input type="password" id="loginPassword" placeholder="Senha" required>
+            <button type="submit">Entrar</button>
+        </form>
+        <p>Não possui uma conta? <span id="showRegister">Cadastre-se</span></p>
+    </div>
+
+    <!-- Tela de Cadastro -->
+    <div id="registerScreen" class="screen hidden">
+        <h2>Cadastro</h2>
+        <form id="registerForm">
+            <input type="text" id="registerUsername" placeholder="Nome de usuário" required>
+            <input type="password" id="registerPassword" placeholder="Senha" required>
+            <button type="submit">Cadastrar</button>
+        </form>
+        <p>Já possui uma conta? <span id="showLogin">Faça login</span></p>
+    </div>
+
+    <script src="{{ url_for('static', filename='Login_Cadastro/auth.js') }}"></script>
+</body>
+
+</html>

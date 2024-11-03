@@ -1,6 +1,6 @@
 import base64
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -8,8 +8,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from user_models import User, db
 from Crypto.Random import get_random_bytes
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://admin:password@localhost/chatdb'
+app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://karolyneraq:1234@localhost/meubanco'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -17,6 +17,18 @@ socketio = SocketIO(app)
 
 # Armazenamento de sessões
 sessions = {}
+
+@app.route('/login_auth')
+def login_page():
+    return render_template('login.html')
+
+@app.route('/chat')
+def chat_page():
+    return render_template('chat.html')
+
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/register', methods=['POST'])
 def register():
