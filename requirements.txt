@@ -12,3 +12,4 @@ python-socketio
 requests
 python-socketio
 websocket-client
+python-dotenv
