@@ -4,9 +4,13 @@ from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
-from user_models import User, db
+from user_models import User
+from message_models import Message
 from Crypto.Random import get_random_bytes
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
+from config import *
 
 load_dotenv()
 
@@ -19,6 +23,43 @@ socketio = SocketIO(app)
 
 # Armazenamento de sessões
 sessions = {}
+
+
+# FUNCTION FOR TEST ####################################
+def add_message(sender_id, recipient_id, content, duration_seconds=40):
+    with app.app_context():
+        new_message = Message(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            content=content,
+            duration=timedelta(seconds=duration_seconds)  # Duração da mensagem
+        )
+        db.session.add(new_message)
+        db.session.commit()
+
+
+def add_user(username, password_hash, public_key):
+    with app.app_context():
+        new_user = User(username=username, password_hash=password_hash, public_key=public_key)
+        db.session.add(new_user)
+        db.session.commit()
+        return new_user.id
+######################################################
+
+
+def clean_expired_messages():
+    with app.app_context():
+        now = datetime.utcnow()
+
+        expired_messages = Message.query.filter(
+            (now - Message.timestamp) > Message.duration
+        ).all()
+
+        for message in expired_messages:
+            db.session.delete(message)
+
+        db.session.commit()
+
 
 @app.route('/login_auth')
 def login_page():
@@ -91,5 +132,13 @@ def handle_send_message(data):
     else:
         print(f"Session not found for {username_a} and {username_b}.")
 
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=clean_expired_messages, trigger="interval", seconds=20)  # Limpa a cada 20 segundos
+scheduler.start()
+
 if __name__ == '__main__':
+    with app.app_context():
+        add_message(sender_id=1, recipient_id=2, content="nois eh viado porra teste")
+
     socketio.run(app, debug=True)

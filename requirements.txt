@@ -13,3 +13,4 @@ requests
 python-socketio
 websocket-client
 python-dotenv
+apscheduler
