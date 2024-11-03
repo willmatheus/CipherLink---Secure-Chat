@@ -1,7 +1,7 @@
 import base64
 import os
 from flask import Flask, request, jsonify, render_template
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from user_models import User
@@ -107,15 +107,26 @@ def handle_start_session(data):
     username_a = data['username_a']
     username_b = data['username_b']
 
-    # Recupera a chave pública de B
+    # Verifica se os usuários existem
+    user_a = User.query.filter_by(username=username_a).first()
     user_b = User.query.filter_by(username=username_b).first()
-    if user_b:
-        # Gera uma chave de sessão simétrica
-        session_key = get_random_bytes(32)
-        sessions[(username_a, username_b)] = session_key
-        sessions[(username_b, username_a)] = session_key  # Ambas as direções
-        emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_a)
-        emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_b)
+
+    if not user_a or not user_b:
+        emit('error', {'message': 'Um ou ambos os usuários não existem.'}, room=request.sid)
+        return
+
+    # Gera uma chave de sessão simétrica
+    session_key = get_random_bytes(32)
+    sessions[(username_a, username_b)] = session_key
+    sessions[(username_b, username_a)] = session_key  # Ambas as direções
+
+    # Adiciona os usuários ao "room"
+    join_room(username_a)
+    join_room(username_b)
+
+    # Envia a chave de sessão criptografada para ambos os usuários
+    emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_a)
+    emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_b)
 
 @socketio.on('send_message')
 def handle_send_message(data):
@@ -123,14 +134,15 @@ def handle_send_message(data):
     username_a = data['username_a']
     username_b = data['username_b']
 
-    # Recupera a chave de sessão
+    # Recupera a chave de sessão para verificar se a sessão está ativa
     session_key = sessions.get((username_a, username_b))
 
     if session_key:
-        # Envia a mensagem criptografada para o destinatário
+        # Envia a mensagem criptografada diretamente ao destinatário no "room"
         emit('receive_message', {'message': encrypted_message}, room=username_b)
     else:
         print(f"Session not found for {username_a} and {username_b}.")
+        emit('error', {'message': 'Sessão não encontrada. Por favor, inicie uma nova sessão.'}, room=username_a)
 
 
 scheduler = BackgroundScheduler()

@@ -10,32 +10,19 @@ from hashlib import pbkdf2_hmac
 
 # Inicializando o cliente SocketIO
 sio = socketio.Client()
-
 RSA_KEY_SIZE = 2048
-session_key = None  # Variável global para a chave de sessão
-
+session_key = None
 
 # Funções auxiliares de criptografia
-
 def generate_keypair():
     private_key = RSA.generate(RSA_KEY_SIZE)
     public_key = private_key.publickey()
     return private_key.export_key(), public_key.export_key()
 
-
-def encrypt_private_key(private_key, password):
-    salt = os.urandom(16)
-    key = pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-    cipher = AES.new(key, AES.MODE_GCM)
-    ciphertext, tag = cipher.encrypt_and_digest(private_key)
-    return b64encode(salt + cipher.nonce + tag + ciphertext).decode()
-
-
 def encrypt_message(message, session_key):
     cipher = AES.new(session_key, AES.MODE_GCM)
     ciphertext, tag = cipher.encrypt_and_digest(message.encode())
     return b64encode(cipher.nonce + tag + ciphertext).decode()
-
 
 def decrypt_message(encrypted_message, session_key):
     raw = b64decode(encrypted_message)
@@ -43,115 +30,94 @@ def decrypt_message(encrypted_message, session_key):
     cipher = AES.new(session_key, AES.MODE_GCM, nonce=nonce)
     return cipher.decrypt_and_verify(ciphertext, tag).decode()
 
-
 # Funções de API para registro e login
-
-def register(username, password):
+def register_user(username, password):
     private_key, public_key = generate_keypair()
-    encrypted_private_key = encrypt_private_key(private_key, password)
-
     response = requests.post('http://localhost:5000/register', json={
         'username': username,
         'password': password,
         'public_key': public_key.decode()
     })
+    print('Status de Registro:', response.status_code)
+    return response.ok
 
-    print('Status Code:', response.status_code)
-    print('Response Text:', response.text)
-
-
-def login(username, password):
+def login_user(username, password):
     response = requests.post('http://localhost:5000/login', json={
         'username': username,
         'password': password
     })
-    return response.json()
+    if response.ok:
+        print("Login bem-sucedido!")
+        return True
+    print("Falha no login.")
+    return False
 
-
-# Iniciar sessão entre dois usuários
-
+# Disparar evento de início de sessão via SocketIO
 def start_session(username_a, username_b):
-    response = requests.post('http://localhost:5000/start_session', json={
-        'username_a': username_a,
-        'username_b': username_b
-    })
-    return response.json()
+    sio.emit('start_session', {'username_a': username_a, 'username_b': username_b})
 
-
-# Enviar mensagem criptografada para outro usuário
-
-def send_message(username_a, username_b, message):
+# Receber confirmação de início de sessão e definir a chave de sessão
+@sio.on('session_started')
+def on_session_started(data):
     global session_key
+    if 'key' in data:
+        session_key = b64decode(data['key'])
+        print("Sessão iniciada com sucesso!")
+    else:
+        print("Erro ao iniciar a sessão.")
+
+# Enviar mensagem criptografada
+def send_message(username_a, username_b, message):
     if session_key:
         encrypted_message = encrypt_message(message, session_key)
-        response = requests.post('http://localhost:5000/send_message', json={
+        sio.emit('send_message', {
             'username_a': username_a,
             'username_b': username_b,
             'message': encrypted_message
         })
-        print('Send Message Response:', response.json())
     else:
-        print("Session key not established. Unable to send message.")
-
+        print("Sessão não estabelecida. Inicie uma sessão primeiro.")
 
 # Lidar com mensagens recebidas
-
 @sio.on('receive_message')
 def handle_receive_message(data):
-    encrypted_message = data['message']
-    message = decrypt_message(encrypted_message, session_key)  # Descriptografa a mensagem
-    print(f"Mensagem recebida: {message}")
+    if session_key:
+        message = decrypt_message(data['message'], session_key)
+        print(f"Mensagem recebida: {message}")
 
-
-# Função principal de execução do cliente
-
-def run_client():
-    global session_key
-    print("Bem-vindo! Escolha uma das opções:")
-
-    # Conectando ao servidor SocketIO
+# Função principal para execução do chat
+def run_chat():
+    # Conectar ao servidor SocketIO
     sio.connect('http://localhost:5000')
 
+    # Solicitar credenciais
+    username = input("Digite seu nome de usuário: ")
+    password = input("Digite sua senha: ")
+
+    # Registrar ou logar usuário
+    if not register_user(username, password):
+        login_success = login_user(username, password)
+        if not login_success:
+            print("Não foi possível fazer login.")
+            return
+
+    # Solicitar nome de usuário do destinatário
+    recipient = input("Digite o nome de usuário do destinatário: ")
+
+    # Iniciar sessão de comunicação
+    start_session(username, recipient)
+
+    # Esperar pela confirmação da sessão antes de enviar mensagens
+    print("Envie suas mensagens. Digite 'sair' para encerrar.")
     while True:
-        print("\n1. Registrar\n2. Login\n3. Iniciar sessão\n4. Enviar mensagem\n5. Sair")
-        choice = input("Escolha uma opção: ")
-
-        if choice == '1':
-            username = input("Digite o nome de usuário: ")
-            password = input("Digite a senha: ")
-            register(username, password)
-
-        elif choice == '2':
-            username = input("Digite o nome de usuário: ")
-            password = input("Digite a senha: ")
-            login_response = login(username, password)
-            if login_response.get("message") == "Login successful":
-                print("Login bem-sucedido!")
-
-        elif choice == '3':
-            username_a = input("Seu nome de usuário: ")
-            username_b = input("Nome de usuário do destinatário: ")
-            session_response = start_session(username_a, username_b)
-            if 'key' in session_response:
-                session_key = b64decode(session_response['key'])
-                print("Sessão iniciada com sucesso!")
-
-        elif choice == '4':
-            if session_key:
-                username_a = input("Seu nome de usuário: ")
-                username_b = input("Nome de usuário do destinatário: ")
-                message = input("Digite a mensagem para enviar: ")
-                send_message(username_a, username_b, message)
-            else:
-                print("Sessão não estabelecida. Por favor, inicie uma sessão primeiro.")
-
-        elif choice == '5':
-            print("Saindo...")
+        message = input("Você: ")
+        if message.lower() == "sair":
+            print("Encerrando o chat.")
             break
+        send_message(username, recipient, message)
 
-        else:
-            print("Opção inválida. Tente novamente.")
-
+    # Desconectar do servidor
+    sio.disconnect()
 
 if __name__ == '__main__':
-    run_client()
+    run_chat()
