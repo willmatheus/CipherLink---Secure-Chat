@@ -88,6 +88,7 @@ def register():
     user = User(username=username, password_hash=password_hash, public_key=public_key)
     db.session.add(user)
     db.session.commit()
+    print(f"\nDEBUG: Chave publica: {public_key}")
     return jsonify({'message': 'User registered successfully'}), 201
 
 
@@ -137,6 +138,13 @@ def add_user_in_friendlist():
     return jsonify({'message': 'User not founded'}), 401
 
 
+@app.route('/all_users', methods=['GET'])
+def get_all_users():
+    users = User.query.all()
+    all_usernames = [user.username for user in users]
+    return jsonify({"users": all_usernames}), 200
+
+
 @app.route('/frienlist', methods=['POST'])
 def is_user_in_friendlist():
     username = request.json['username']
@@ -145,6 +153,15 @@ def is_user_in_friendlist():
     if username_to_talk in user_friend_list:
         return jsonify({'status': True}), 200
     return jsonify({'message': 'User not found'}), 404
+
+
+@app.route('/friendlist/<username>', methods=['GET'])
+def get_friend_list(username):
+    user = User.query.filter_by(username=username).first()
+    if user:
+        friend_list = user.get_friend_list()
+        return jsonify({"friends": friend_list}), 200
+    return jsonify({"message": "User not found"}), 404
 
 
 @app.route('/get_public_key/<username>', methods=['GET'])
@@ -170,6 +187,7 @@ def handle_start_session(data):
 
     # Gera uma chave de sessão simétrica
     session_key = get_random_bytes(32)
+    print(f"DEBUG: Chave de sessão: {session_key}")
     sessions[(username_a, username_b)] = session_key
     sessions[(username_b, username_a)] = session_key  # Ambas as direções
 
@@ -215,3 +233,5 @@ if __name__ == '__main__':
        # add_message(sender_id=1, recipient_id=2, content="nois eh viado porra teste")
 
     socketio.run(app, debug=True)
+
+    #socketio.run(app, host='0.0.0.0', port=5000, debug=True)
