@@ -5,6 +5,7 @@ import socketio
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
+from Crypto.Cipher import ChaCha20
 from base64 import b64encode, b64decode
 from hashlib import pbkdf2_hmac
 import random
@@ -22,15 +23,20 @@ def generate_keypair():
     return private_key.export_key(), public_key.export_key()
 
 def encrypt_message(message, session_key):
-    cipher = AES.new(session_key, AES.MODE_GCM)
-    ciphertext, tag = cipher.encrypt_and_digest(message.encode())
-    return b64encode(cipher.nonce + tag + ciphertext).decode()
+    # Gera um nonce aleatório de 12 bytes para ChaCha20
+    nonce = get_random_bytes(12)
+    cipher = ChaCha20.new(key=session_key, nonce=nonce)
+    ciphertext = cipher.encrypt(message.encode())
+    # Retorna o nonce + ciphertext codificados em base64
+    return b64encode(nonce + ciphertext).decode()
 
 def decrypt_message(encrypted_message, session_key):
+    # Decodifica a mensagem base64 e separa o nonce e o ciphertext
     raw = b64decode(encrypted_message)
-    nonce, tag, ciphertext = raw[:16], raw[16:32], raw[32:]
-    cipher = AES.new(session_key, AES.MODE_GCM, nonce=nonce)
-    return cipher.decrypt_and_verify(ciphertext, tag).decode()
+    nonce, ciphertext = raw[:12], raw[12:]
+    cipher = ChaCha20.new(key=session_key, nonce=nonce)
+    # Descriptografa o texto e o retorna decodificado
+    return cipher.decrypt(ciphertext).decode()
 
 # Funções de API para registro e login
 def register_user(username, password):
