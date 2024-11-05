@@ -209,7 +209,7 @@ def handle_send_message(data):
     # Recupera a chave de sessão para verificar se a sessão está ativa
     session_key = sessions.get((username_a, username_b))
 
-    is_user_b_online = username_b in [sid for sid, user in clients.items() if user]
+    is_user_b_online = username_b in clients.values()
 
     if True:
         if is_user_b_online:
