@@ -16,6 +16,7 @@ sio = socketio.Client()
 RSA_KEY_SIZE = 2048
 session_key = None
 
+
 # Funções auxiliares de criptografia
 def generate_keypair():
     private_key = RSA.generate(RSA_KEY_SIZE)
@@ -25,6 +26,7 @@ def generate_keypair():
     print(f"DEBUG: Chave privada: {private_key}")
     return private_key.export_key(), public_key.export_key()
 
+
 def encrypt_message(message, session_key):
     # Gera um nonce aleatório de 12 bytes para ChaCha20
     nonce = get_random_bytes(12)
@@ -33,6 +35,7 @@ def encrypt_message(message, session_key):
     # Retorna o nonce + ciphertext codificados em base64
     return b64encode(nonce + ciphertext).decode()
 
+
 def decrypt_message(encrypted_message, session_key):
     # Decodifica a mensagem base64 e separa o nonce e o ciphertext
     raw = b64decode(encrypted_message)
@@ -40,6 +43,7 @@ def decrypt_message(encrypted_message, session_key):
     cipher = ChaCha20.new(key=session_key, nonce=nonce)
     # Descriptografa o texto e o retorna decodificado
     return cipher.decrypt(ciphertext).decode()
+
 
 # Funções de API para registro e login
 def register_user(username, password):
@@ -51,7 +55,6 @@ def register_user(username, password):
     })
     print('Status de Registro:', response.status_code)
     return response.ok
-
 
 
 def add_user_in_friendlist(username, username_to_add):
@@ -79,9 +82,11 @@ def is_user_in_friendlist(username, username_to_talk):
         return True
     return False
 
+
 # Disparar evento de início de sessão via SocketIO
 def start_session(username_a, username_b):
     sio.emit('start_session', {'username_a': username_a, 'username_b': username_b})
+
 
 # Receber confirmação de início de sessão e definir a chave de sessão
 @sio.on('session_started')
@@ -92,6 +97,7 @@ def on_session_started(data):
         print("Sessão iniciada com sucesso!")
     else:
         print("Erro ao iniciar a sessão.")
+
 
 # Enviar mensagem criptografada
 def send_message(username_a, username_b, message):
@@ -141,11 +147,14 @@ def login_user(username, password, sid):
         'password': password,
         'sid': sid,
     })
+
     if response.ok:
         print("\nLogin bem-sucedido!")
+        print("Mensagens offline:", response.json().get('offline_messages', []))
         return True
     print("\nFalha no login.")
     return False
+
 
 def chat_with_user(username, user_to_talk):
     print(f"\n╔═════════════════╗")
@@ -159,6 +168,7 @@ def chat_with_user(username, user_to_talk):
             print("Voltando ao menu principal.")
             break
         send_message(username, user_to_talk, message)
+
 
 def main_menu(username):
     while True:
@@ -270,6 +280,7 @@ def run_chat():
 
     # Desconectar do servidor
     sio.disconnect()
+
 
 if __name__ == '__main__':
     run_chat()

@@ -61,21 +61,6 @@ def clean_expired_messages():
         db.session.commit()
 
 
-@app.route('/login_auth')
-def login_page():
-    return render_template('login.html')
-
-
-@app.route('/chat')
-def chat_page():
-    return render_template('chat.html')
-
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json
@@ -103,10 +88,17 @@ def login():
     if user and check_password_hash(user.get_password_hashed(), password):
         clients[sid] = username
 
+        offline_messages = update_offline_messages(user.id)
+
         print(clients)
-        return jsonify({'message': 'Login successful', 'username': username}), 200
+        return jsonify({'message': 'Login successful', 'username': username,'offline_messages': offline_messages}), 200
 
     return jsonify({'message': 'Invalid credentials'}), 401
+
+
+def update_offline_messages(sender_id):
+    msgs = Message.query.filter_by(sender_id=sender_id).values()
+    return [msg.to_dict() for msg in msgs]
 
 
 
@@ -217,7 +209,6 @@ def handle_send_message(data):
             emit('receive_message', {'message': encrypted_message}, room=username_b)
         else:
             add_message(1, 2, encrypted_message)
-            print("DonaPuta ta OFF")
 
     else:
         print(f"Session not found for {username_a} and {username_b}.")
