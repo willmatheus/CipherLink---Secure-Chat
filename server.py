@@ -61,6 +61,8 @@ def clean_expired_messages():
         db.session.commit()
 
 
+# ---------- User Authentication Routes -------------
+
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json
@@ -96,10 +98,11 @@ def login():
     return jsonify({'message': 'Invalid credentials'}), 401
 
 
+# ---------- Chat Functions -------------
+
 def update_offline_messages(sender_id):
     msgs = Message.query.filter_by(sender_id=sender_id).values()
     return [msg.to_dict() for msg in msgs]
-
 
 
 @socketio.on('connect')
@@ -116,6 +119,9 @@ def handle_disconnect():
 
     print(f"User with session id {sid} disconnected.")
     print(clients)
+
+
+# ---------- User Routes -------------
 
 @app.route('/user', methods=['POST'])
 def add_user_in_friendlist():
@@ -136,6 +142,7 @@ def get_all_users():
     all_usernames = [user.username for user in users]
     return jsonify({"users": all_usernames}), 200
 
+# ---------- Friendlist Routes -------------
 
 @app.route('/frienlist', methods=['POST'])
 def is_user_in_friendlist():
