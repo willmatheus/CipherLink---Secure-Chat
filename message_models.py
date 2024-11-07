@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from config import *
+from config import db
 
 
 class Message(db.Model):
@@ -9,7 +9,7 @@ class Message(db.Model):
     recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Destinatário
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    duration = db.Column(db.Interval, nullable=False, default=timedelta(seconds=50))  # Duração padrão de 7 dias
+    duration = db.Column(db.Interval, nullable=False, default=lambda: timedelta(seconds=50))  # Duração padrão
 
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
     recipient = db.relationship('User', foreign_keys=[recipient_id], backref='received_messages')
@@ -18,12 +18,13 @@ class Message(db.Model):
         return {
             'id': self.id,
             'sender_id': self.sender_id,
-            'receiver_id': self.recipient_id,
+            'recipient_id': self.recipient_id,
             'content': self.content,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'sender': self.sender,
-            'recipient': self.recipient
+            # Retornando apenas IDs para evitar problemas de serialização
+            'sender_username': self.sender.username if self.sender else None,
+            'recipient_username': self.recipient.username if self.recipient else None,
         }
 
-    def repr(self):
+    def __repr__(self):
         return f'<Message {self.id} from User {self.sender_id} to User {self.recipient_id}>'

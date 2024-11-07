@@ -1,6 +1,6 @@
 import base64
 import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,6 +25,7 @@ socketio = SocketIO(app)
 sessions = {}
 clients = {}
 
+
 # FUNCTIONS FOR TEST ####################################
 def add_message(sender_id, recipient_id, content, duration_seconds=40):
     with app.app_context():
@@ -44,6 +45,8 @@ def add_user(username, password_hash, public_key):
         db.session.add(new_user)
         db.session.commit()
         return new_user.id
+
+
 ######################################################
 
 
@@ -83,17 +86,15 @@ def register():
 def login():
     username = request.json['username']
     password = request.json['password']
-    sid = request.json['sid']
 
     user = User.query.filter_by(username=username).first()
 
     if user and check_password_hash(user.get_password_hashed(), password):
-        clients[sid] = username
 
         offline_messages = update_offline_messages(user.id)
 
         print(clients)
-        return jsonify({'message': 'Login successful', 'username': username,'offline_messages': offline_messages}), 200
+        return jsonify({'message': 'Login successful', 'username': username, 'offline_messages': offline_messages}), 200
 
     return jsonify({'message': 'Invalid credentials'}), 401
 
@@ -163,63 +164,41 @@ def get_friend_list(username):
     return jsonify({"message": "User not found"}), 404
 
 
-@app.route('/get_public_key/<username>', methods=['GET'])
-def get_public_key(username):
+# Função auxiliar para obter chave pública do usuário
+def get_user_public_key(username):
     user = User.query.filter_by(username=username).first()
-    if user:
-        return jsonify({'public_key': user.public_key}), 200
-    return jsonify({'message': 'User not found'}), 404
+    return user.public_key if user else None
 
 
-@socketio.on('start_session')
-def handle_start_session(data):
-    username_a = data['username_a']
-    username_b = data['username_b']
+@socketio.on('handle_public_key_request')
+def handle_public_key_request(data):
+    username_to_talk = data['username_to_talk']
+    user_public_key = get_user_public_key(username_to_talk)
+    if user_public_key:
+        emit('receive_public_key', {'username_to_talk': username_to_talk, 'user_public_key': user_public_key})
+    else:
+        emit('error', {'message': 'User not found or no public key available'}, room=request.sid)
 
-    # Verifica se os usuários existem
-    user_a = User.query.filter_by(username=username_a).first()
-    user_b = User.query.filter_by(username=username_b).first()
 
-    if not user_a or not user_b:
-        emit('error', {'message': 'Um ou ambos os usuários não existem.'}, room=request.sid)
-        return
+# Rota para troca de chave de sessão ChaCha20
+@socketio.on('send_session_key')
+def handle_session_key(data):
+    username_to_talk = data['username_to_talk']
+    encrypted_session_key = data['encrypted_session_key']
 
-    # Gera uma chave de sessão simétrica
-    session_key = get_random_bytes(32)
-    print(f"DEBUG: Chave de sessão: {session_key}")
-    sessions[(username_a, username_b)] = session_key
-    sessions[(username_b, username_a)] = session_key  # Ambas as direções
-
-    # Adiciona os usuários ao "room"
-    join_room(username_a)
-    join_room(username_b)
-
-    # Envia a chave de sessão criptografada para ambos os usuários
-    emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_a)
-    emit('session_started', {'message': 'Session started', 'key': base64.b64encode(session_key).decode()}, room=username_b)
+    print(encrypted_session_key)
+    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'username_to_talk': username_to_talk}, room=username_to_talk)
 
 
 @socketio.on('send_message')
 def handle_send_message(data):
-    encrypted_message = data['message']
-    username_a = data['username_a']
-    username_b = data['username_b']
+    encrypted_message = data['encrypted_message']
+    print(encrypted_message)
+    username_to_talk = data['username_to_talk']
+    print(username_to_talk)
 
-    # Recupera a chave de sessão para verificar se a sessão está ativa
-    session_key = sessions.get((username_a, username_b))
-
-    is_user_b_online = username_b in clients.values()
-
-    if True:
-        if is_user_b_online:
-            # Envia a mensagem criptografada diretamente ao destinatário no "room"
-            emit('receive_message', {'message': encrypted_message}, room=username_b)
-        else:
-            add_message(1, 2, encrypted_message)
-
-    else:
-        print(f"Session not found for {username_a} and {username_b}.")
-        emit('error', {'message': 'Sessão não encontrada. Por favor, inicie uma nova sessão.'}, room=username_a)
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room=username_to_talk)
+    #add_message(1, 2, encrypted_message)
 
 
 scheduler = BackgroundScheduler()
@@ -228,8 +207,8 @@ scheduler.start()
 
 if __name__ == '__main__':
     # with app.app_context():
-       # add_message(sender_id=1, recipient_id=2, content="nois eh viado porra teste")
+    # add_message(sender_id=1, recipient_id=2, content="nois eh viado porra teste")
 
     socketio.run(app, debug=True)
 
-    #socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    # socketio.run(app, host='0.0.0.0', port=5000, debug=True)

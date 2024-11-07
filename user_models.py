@@ -13,6 +13,9 @@ class User(db.Model):
     def get_password_hashed(self):
         return self.password_hash
 
+    def get_public_key(self):
+        return self.public_key
+
     def get_username(self):
         return self.username
 
