@@ -1,6 +1,6 @@
 import base64
 import os
-from flask import Flask, request, jsonify, render_template, request
+from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -106,22 +106,6 @@ def update_offline_messages(sender_id):
     return [msg.to_dict() for msg in msgs]
 
 
-@socketio.on('connect')
-def handle_connect():
-    sid = request.headers['sid']
-    print(f"User connected with session id: {sid}")
-
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    sid = request.headers['sid']
-    if sid in clients:
-        del clients[sid]  # Remove o cliente da lista ao desconectar
-
-    print(f"User with session id {sid} disconnected.")
-    print(clients)
-
-
 # ---------- User Routes -------------
 
 @app.route('/user', methods=['POST'])
@@ -185,7 +169,6 @@ def handle_public_key_request(data):
 def handle_session_key(data):
     username_to_talk = data['username_to_talk']
     encrypted_session_key = data['encrypted_session_key']
-
     print(encrypted_session_key)
     emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'username_to_talk': username_to_talk}, room=username_to_talk)
 
