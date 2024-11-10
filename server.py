@@ -1,12 +1,10 @@
-import base64
 import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from user_models import User
 from message_models import Message
-from Crypto.Random import get_random_bytes
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -170,7 +168,7 @@ def handle_session_key(data):
     username_to_talk = data['username_to_talk']
     encrypted_session_key = data['encrypted_session_key']
     print(encrypted_session_key)
-    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'username_to_talk': username_to_talk}, room=username_to_talk)
+    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'username_to_talk': username_to_talk})
 
 
 @socketio.on('send_message')
@@ -180,8 +178,15 @@ def handle_send_message(data):
     username_to_talk = data['username_to_talk']
     print(username_to_talk)
 
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room=username_to_talk)
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room='room')
     #add_message(1, 2, encrypted_message)
+
+
+@socketio.on('join')
+def on_join(data):
+    room = 'room'
+    join_room(room)
+    print("Usuarios entraram na sala: room")
 
 
 scheduler = BackgroundScheduler()

@@ -1,24 +1,7 @@
-import os
-import json
 import requests
 import socketio
-import random
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
-from Crypto.Cipher import ChaCha20
-from base64 import b64encode, b64decode
-from hashlib import pbkdf2_hmac
-
-# Cryptography lib for private key
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import pickle
-
-import random
 from utils import *
 
 # Inicializando o cliente SocketIO
@@ -80,6 +63,9 @@ def request_user_public_key(username_to_talk):
     sio.emit('handle_public_key_request', {'username_to_talk': username_to_talk})
 
 
+def join_room(username, username_to_talk):
+    sio.emit('join', {'username': username, 'username_to_talk': username_to_talk})
+
 @sio.on('receive_public_key')
 def handle_receive_public_key(data):
     username_to_talk = data['username_to_talk']
@@ -101,7 +87,7 @@ def on_receive_session_key(data):
     encrypted_session_key = data['encrypted_session_key']
     username_to_talk = data['username_to_talk']
     session_key = decrypt_with_private_key(encrypted_session_key, global_private_key)
-    if (not session_keys):
+    if not session_keys:
         print("No session key !!!!!!!!!")
         return
     session_keys[username_to_talk] = session_key
@@ -109,19 +95,12 @@ def on_receive_session_key(data):
 
 
 def send_message(username_to_talk, message):
-    if username_to_talk not in session_keys:
-        print("Chave de sessão não encontrada. Inicie uma sessão primeiro.")
-        return
 
-    # Criptografa a mensagem com ChaCha20
-    session_key = session_keys[username_to_talk]
-    print(session_key)
-    encrypted_message = encrypt_chacha20_message(session_key, message)
 
     # Envia a mensagem criptografada
     sio.emit('send_message', {
         'username_to_talk': username_to_talk,
-        'encrypted_message': encrypted_message
+        'encrypted_message': message
     })
 
 
@@ -130,16 +109,8 @@ def send_message(username_to_talk, message):
 def on_receive_message(data):
     encrypted_message = data['encrypted_message']
     username_to_talk = data['username_to_talk']
-    print(encrypted_message)
-    session_key = session_keys.get(username_to_talk)
-    print(session_key)
+    print(f"{username_to_talk}:", encrypted_message)
 
-    if session_key:
-        # Descriptografa a mensagem recebida
-        message = decrypt_chacha20_message(session_key, encrypted_message)
-        print(f"{username_to_talk}:", message.decode())
-    else:
-        print("Sessão segura não estabelecida com o usuário.")
 
 # ---------- User Functions -------------
 
@@ -252,7 +223,8 @@ def main_menu(username):
                 print("Usuario nao encontrado na lista de amigos.")
                 continue
 
-            request_user_public_key(user_to_talk)
+            join_room(username, user_to_talk)
+
             chat_with_user(username, user_to_talk)
         elif choice == "3":
             print("Encerrando o programa. Ate logo!")
