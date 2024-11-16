@@ -20,7 +20,7 @@ migrate = Migrate(app, db)
 socketio = SocketIO(app)
 
 # Armazenamento de sessões
-sessions = {}
+session_keys = {}
 clients = {}
 
 
@@ -84,16 +84,11 @@ def register():
 def login():
     username = request.json['username']
     password = request.json['password']
-
     user = User.query.filter_by(username=username).first()
 
     if user and check_password_hash(user.get_password_hashed(), password):
-
         offline_messages = update_offline_messages(user.id)
-
-        print(clients)
         return jsonify({'message': 'Login successful', 'username': username, 'offline_messages': offline_messages}), 200
-
     return jsonify({'message': 'Invalid credentials'}), 401
 
 
@@ -112,6 +107,7 @@ def add_user_in_friendlist():
     user_name_to_add = request.json['username_to_add']
     user = User.query.filter_by(username=username).first()
     user_name_to_add = User.query.filter_by(username=user_name_to_add).first().get_username()
+
     if user_name_to_add:
         user.add_user_to_friendlist(user_name_to_add)
         db.session.commit()
@@ -125,6 +121,14 @@ def get_all_users():
     all_usernames = [user.username for user in users]
     return jsonify({"users": all_usernames}), 200
 
+
+@app.route('/public_key/<username>', methods=['GET'])
+def get_user_public_key(username):
+    user_public_key = User.query.filter_by(username=username).first().get_public_key()
+    if user_public_key:
+        return jsonify({"message": "public key successfully achieved", "user_public_key": user_public_key}), 200
+    return jsonify({"message": "public key not founded"}), 401
+
 # ---------- Friendlist Routes -------------
 
 @app.route('/frienlist', methods=['POST'])
@@ -132,6 +136,7 @@ def is_user_in_friendlist():
     username = request.json['username']
     username_to_talk = request.json['username_to_talk']
     user_friend_list = User.query.filter_by(username=username).first().get_friend_list()
+
     if username_to_talk in user_friend_list:
         return jsonify({'status': True}), 200
     return jsonify({'message': 'User not found'}), 404
@@ -146,47 +151,42 @@ def get_friend_list(username):
     return jsonify({"message": "User not found"}), 404
 
 
-# Função auxiliar para obter chave pública do usuário
-def get_user_public_key(username):
-    user = User.query.filter_by(username=username).first()
-    return user.public_key if user else None
-
-
-@socketio.on('handle_public_key_request')
-def handle_public_key_request(data):
-    username_to_talk = data['username_to_talk']
-    user_public_key = get_user_public_key(username_to_talk)
-    if user_public_key:
-        emit('receive_public_key', {'username_to_talk': username_to_talk, 'user_public_key': user_public_key})
-    else:
-        emit('error', {'message': 'User not found or no public key available'}, room=request.sid)
-
-
 # Rota para troca de chave de sessão ChaCha20
 @socketio.on('send_session_key')
 def handle_session_key(data):
-    username_to_talk = data['username_to_talk']
+    room = data['room']
     encrypted_session_key = data['encrypted_session_key']
     print(encrypted_session_key)
-    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'username_to_talk': username_to_talk})
+    session_keys[room] = encrypted_session_key
+    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, room=room)
 
 
 @socketio.on('send_message')
 def handle_send_message(data):
     encrypted_message = data['encrypted_message']
     print(encrypted_message)
+    username = data['username']
     username_to_talk = data['username_to_talk']
     print(username_to_talk)
+    room = f"room_{'_'.join(sorted([username, username_to_talk]))}"
 
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room='room')
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room=room)
     #add_message(1, 2, encrypted_message)
 
 
 @socketio.on('join')
 def on_join(data):
-    room = 'room'
+    room = data['room']
+    username = data['username']
+
     join_room(room)
-    print("Usuarios entraram na sala: room")
+    if room not in session_keys:
+        clients[room] = username
+        emit('generate_session_key', {'room': room}, room=room)
+    else:
+        encrypted_session_key = session_keys[room]
+        print(session_keys[room])
+        emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, room=room)
 
 
 scheduler = BackgroundScheduler()
@@ -194,9 +194,4 @@ scheduler.add_job(func=clean_expired_messages, trigger="interval", seconds=20)  
 scheduler.start()
 
 if __name__ == '__main__':
-    # with app.app_context():
-    # add_message(sender_id=1, recipient_id=2, content="nois eh viado porra teste")
-
     socketio.run(app, debug=True)
-
-    # socketio.run(app, host='0.0.0.0', port=5000, debug=True)

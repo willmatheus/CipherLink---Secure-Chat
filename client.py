@@ -1,28 +1,23 @@
 import requests
 import socketio
-from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
+from flask_socketio import leave_room
+
 from utils import *
 
 # Inicializando o cliente SocketIO
 sio = socketio.Client()
-RSA_KEY_SIZE = 2048
-session_key = None
 
-# ---------- Cryptography auxiliary functions -------------
 message_history = []
 global global_private_key
 session_keys = {}
+public_keys = {}
 
-def generate_keypair():
-    private_key = RSA.generate(RSA_KEY_SIZE)
-    public_key = private_key.publickey()
-    return private_key.export_key(), public_key.export_key()
 
 # ---------- Friendlist Functions -------------
 def add_user_in_friendlist(username, username_to_add):
     friendlist = get_friend_list(username)
-    if not username_to_add in friendlist:
+    if username_to_add not in friendlist:
         response = requests.post('http://localhost:5000/user', json={
             'username': username,
             'username_to_add': username_to_add
@@ -55,50 +50,45 @@ def get_friend_list(username):
         return []
 
 
+def request_user_public_key(username_to_talk):
+    response = requests.get(f'http://localhost:5000/public_key/{username_to_talk}')
+    if response.ok:
+        public_key = response.json().get("user_public_key")
+        public_keys[username_to_talk] = public_key
+        return public_key
+    else:
+        print(f"Erro ao obter a chave publica do usuario: {username_to_talk}")
+
+
 # ---------- Chat Functions -------------
 # Disparar evento de início de sessão via SocketIO
 
-
-def request_user_public_key(username_to_talk):
-    sio.emit('handle_public_key_request', {'username_to_talk': username_to_talk})
-
-
 def join_room(username, username_to_talk):
-    sio.emit('join', {'username': username, 'username_to_talk': username_to_talk})
+    room = f"room_{'_'.join(sorted([username, username_to_talk]))}"
+    sio.emit('join', {'room': room, 'username': username})
 
-@sio.on('receive_public_key')
-def handle_receive_public_key(data):
-    username_to_talk = data['username_to_talk']
-    user_public_key = data['user_public_key']
-    session_key = get_random_bytes(32)
-    encrypted_session_key = encrypt_with_public_key(session_key, user_public_key)
 
-    sio.emit('send_session_key', {
-        'username_to_talk': username_to_talk,
-        'encrypted_session_key': encrypted_session_key
-    })
-    session_keys[username_to_talk] = session_key
+@sio.on('generate_session_key')
+def generate_session_key(data):
+    room = data['room']
+    session_keys[room] = str(os.urandom(32))
+    print(session_keys[room])
+    sio.emit('send_session_key', {'encrypted_session_key': session_keys[room], 'room': room})
 
 
 # Callback para recebimento da chave de sessão
 @sio.on('receive_session_key')
 def on_receive_session_key(data):
-    print("on_receive_session_key")
     encrypted_session_key = data['encrypted_session_key']
-    username_to_talk = data['username_to_talk']
-    session_key = decrypt_with_private_key(encrypted_session_key, global_private_key)
-    if not session_keys:
-        print("No session key !!!!!!!!!")
-        return
-    session_keys[username_to_talk] = session_key
-    print(session_keys)
+    room = data['room']
+    if room not in session_keys:
+        session_keys[room] = encrypted_session_key
 
 
-def send_message(username_to_talk, message):
-
-
+def send_message(username, username_to_talk, message):
     # Envia a mensagem criptografada
     sio.emit('send_message', {
+        'username': username,
         'username_to_talk': username_to_talk,
         'encrypted_message': message
     })
@@ -118,11 +108,11 @@ def get_all_users():
     response = requests.get('http://localhost:5000/all_users')
     if response.ok:
         all_users = response.json().get("users", [])
-
         return all_users
     else:
         print("Erro ao obter a lista de usuários.")
         return []
+
 
 # Funções de API para registro e login
 def register_user(username, password):
@@ -169,6 +159,8 @@ def login_user(username, password):
 # ---------- Interface functions -------------
 
 def chat_with_user(username, user_to_talk):
+    request_user_public_key(user_to_talk)
+    join_room(username, user_to_talk)
     print(f"\n╔═════════════════╗")
     print(f" Chat com {user_to_talk}")
     print("╚═════════════════╝")
@@ -178,8 +170,10 @@ def chat_with_user(username, user_to_talk):
         message = input("Você: ")
         if message.lower() == "sair":
             print("Voltando ao menu principal.")
+            leave_room(username, user_to_talk)
             break
-        send_message(user_to_talk, message)
+        send_message(username, user_to_talk, message)
+        print(session_keys)
 
 
 def main_menu(username):
@@ -222,9 +216,6 @@ def main_menu(username):
             if not is_user_in_friendlist(username, user_to_talk):
                 print("Usuario nao encontrado na lista de amigos.")
                 continue
-
-            join_room(username, user_to_talk)
-
             chat_with_user(username, user_to_talk)
         elif choice == "3":
             print("Encerrando o programa. Ate logo!")
@@ -235,9 +226,8 @@ def main_menu(username):
 
 # Função principal para execução do chat
 def run_chat():
-
     sio.connect('http://localhost:5000/')
-    #sio.connect('http://192.168.1.7:5000', headers={'sid': sid})
+    # sio.connect('http://192.168.1.7:5000', headers={'sid': sid})
 
     print("\n")
 

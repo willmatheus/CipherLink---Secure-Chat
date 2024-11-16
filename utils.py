@@ -1,13 +1,23 @@
 import pickle
+
+from Crypto.PublicKey import RSA
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric import rsa
 import os
 import base64
+
+
+RSA_KEY_SIZE = 2048
+
+
+def generate_keypair():
+    private_key = RSA.generate(RSA_KEY_SIZE)
+    public_key = private_key.publickey()
+    return private_key.export_key(), public_key.export_key()
 
 
 def encrypt_with_public_key(data, public_key_pem):
