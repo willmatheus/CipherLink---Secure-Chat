@@ -50,11 +50,11 @@ def get_friend_list(username):
         return []
 
 
-def request_user_public_key(username_to_talk):
+def request_user_public_key(username_to_talk, room):
     response = requests.get(f'http://localhost:5000/public_key/{username_to_talk}')
     if response.ok:
         public_key = response.json().get("user_public_key")
-        public_keys[username_to_talk] = public_key
+        public_keys[room] = public_key
         return public_key
     else:
         print(f"Erro ao obter a chave publica do usuario: {username_to_talk}")
@@ -63,8 +63,7 @@ def request_user_public_key(username_to_talk):
 # ---------- Chat Functions -------------
 # Disparar evento de início de sessão via SocketIO
 
-def join_room(username, username_to_talk):
-    room = f"room_{'_'.join(sorted([username, username_to_talk]))}"
+def join(username, room):
     sio.emit('join', {'room': room, 'username': username})
 
 
@@ -72,7 +71,6 @@ def join_room(username, username_to_talk):
 def generate_session_key(data):
     room = data['room']
     session_keys[room] = str(os.urandom(32))
-    print(session_keys[room])
     sio.emit('send_session_key', {'encrypted_session_key': session_keys[room], 'room': room})
 
 
@@ -85,12 +83,12 @@ def on_receive_session_key(data):
         session_keys[room] = encrypted_session_key
 
 
-def send_message(username, username_to_talk, message):
+def send_message(username, message, room):
     # Envia a mensagem criptografada
     sio.emit('send_message', {
         'username': username,
-        'username_to_talk': username_to_talk,
-        'encrypted_message': message
+        'encrypted_message': message,
+        'room': room
     })
 
 
@@ -98,8 +96,8 @@ def send_message(username, username_to_talk, message):
 @sio.on('receive_message')
 def on_receive_message(data):
     encrypted_message = data['encrypted_message']
-    username_to_talk = data['username_to_talk']
-    print(f"{username_to_talk}:", encrypted_message)
+    username = data['username']
+    print(f"{username}:", encrypted_message)
 
 
 # ---------- User Functions -------------
@@ -153,14 +151,14 @@ def login_user(username, password):
         return True, private_key
 
     print("\nFalha no login.")
-    return False
+    return False, None
 
 
 # ---------- Interface functions -------------
 
-def chat_with_user(username, user_to_talk):
-    request_user_public_key(user_to_talk)
-    join_room(username, user_to_talk)
+def chat_with_user(username, user_to_talk, room):
+    request_user_public_key(user_to_talk, room)
+    join(username, room)
     print(f"\n╔═════════════════╗")
     print(f" Chat com {user_to_talk}")
     print("╚═════════════════╝")
@@ -170,10 +168,9 @@ def chat_with_user(username, user_to_talk):
         message = input("Você: ")
         if message.lower() == "sair":
             print("Voltando ao menu principal.")
-            leave_room(username, user_to_talk)
+            leave_room(room)
             break
-        send_message(username, user_to_talk, message)
-        print(session_keys)
+        send_message(username, message, room)
 
 
 def main_menu(username):
@@ -213,10 +210,11 @@ def main_menu(username):
                 print("Voce nao tem amigos adicionados ainda.")
 
             user_to_talk = input("Digite o nome do usuario da lista de amigos que voce quer conversar: ")
+            room = f"room_{'_'.join(sorted([username, user_to_talk]))}"
             if not is_user_in_friendlist(username, user_to_talk):
                 print("Usuario nao encontrado na lista de amigos.")
                 continue
-            chat_with_user(username, user_to_talk)
+            chat_with_user(username, user_to_talk, room)
         elif choice == "3":
             print("Encerrando o programa. Ate logo!")
             break

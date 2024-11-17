@@ -166,11 +166,8 @@ def handle_send_message(data):
     encrypted_message = data['encrypted_message']
     print(encrypted_message)
     username = data['username']
-    username_to_talk = data['username_to_talk']
-    print(username_to_talk)
-    room = f"room_{'_'.join(sorted([username, username_to_talk]))}"
-
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username_to_talk': username_to_talk}, room=room)
+    room = data['room']
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username}, room=room, include_self=False)
     #add_message(1, 2, encrypted_message)
 
 
