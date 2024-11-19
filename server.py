@@ -158,7 +158,7 @@ def handle_session_key(data):
     encrypted_session_key = data['encrypted_session_key']
     print(encrypted_session_key)
     session_keys[room] = encrypted_session_key
-    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, room=room)
+    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, to=room, include_self=False)
 
 
 @socketio.on('send_message')
@@ -167,7 +167,7 @@ def handle_send_message(data):
     print(encrypted_message)
     username = data['username']
     room = data['room']
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username}, room=room, include_self=False)
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username}, to=room, include_self=False)
     #add_message(1, 2, encrypted_message)
 
 
@@ -179,11 +179,11 @@ def on_join(data):
     join_room(room)
     if room not in session_keys:
         clients[room] = username
-        emit('generate_session_key', {'room': room}, room=room)
+        emit('generate_session_key', {'room': room})
     else:
         encrypted_session_key = session_keys[room]
         print(session_keys[room])
-        emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, room=room)
+        emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
 
 
 scheduler = BackgroundScheduler()

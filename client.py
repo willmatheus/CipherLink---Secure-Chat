@@ -70,8 +70,9 @@ def join(username, room):
 @sio.on('generate_session_key')
 def generate_session_key(data):
     room = data['room']
-    session_keys[room] = str(os.urandom(32))
-    sio.emit('send_session_key', {'encrypted_session_key': session_keys[room], 'room': room})
+    session_keys[room] = os.urandom(32)
+    encrypted_session_key = encrypt_with_public_key(session_keys[room], public_keys[room])
+    sio.emit('send_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
 
 
 # Callback para recebimento da chave de sessão
