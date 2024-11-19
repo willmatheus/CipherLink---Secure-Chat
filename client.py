@@ -1,9 +1,8 @@
 import requests
 import socketio
-from Crypto.Random import get_random_bytes
+from utils import *
 from flask_socketio import leave_room
 
-from utils import *
 
 # Inicializando o cliente SocketIO
 sio = socketio.Client()
@@ -12,6 +11,8 @@ message_history = []
 global global_private_key
 session_keys = {}
 public_keys = {}
+global_username = None
+global_password = None
 
 
 # ---------- Friendlist Functions -------------
@@ -80,15 +81,17 @@ def generate_session_key(data):
 def on_receive_session_key(data):
     encrypted_session_key = data['encrypted_session_key']
     room = data['room']
+    session_keys[room] = decrypt_with_private_key(encrypted_session_key, global_private_key)
     if room not in session_keys:
         session_keys[room] = encrypted_session_key
 
 
 def send_message(username, message, room):
     # Envia a mensagem criptografada
+    encrypted_message = encrypt_chacha20_message(session_keys[room], message)
     sio.emit('send_message', {
         'username': username,
-        'encrypted_message': message,
+        'encrypted_message': encrypted_message,
         'room': room
     })
 
@@ -98,7 +101,9 @@ def send_message(username, message, room):
 def on_receive_message(data):
     encrypted_message = data['encrypted_message']
     username = data['username']
-    print(f"{username}:", encrypted_message)
+    room = data['room']
+    decrypted_message = decrypt_chacha20_message(session_keys[room], encrypted_message)
+    print(f"{username}:", decrypted_message)
 
 
 # ---------- User Functions -------------

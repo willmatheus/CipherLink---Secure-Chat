@@ -75,7 +75,7 @@ def decrypt_chacha20_message(key, encrypted_message):
     nonce, ciphertext = decoded_data[:16], decoded_data[16:]
     cipher = Cipher(algorithms.ChaCha20(key, nonce), mode=None, backend=default_backend())
     decryptor = cipher.decryptor()
-    return decryptor.update(ciphertext) + decryptor.finalize()
+    return (decryptor.update(ciphertext) + decryptor.finalize()).decode('utf-8')
 
 
 def derive_key(password: str, salt: bytes) -> bytes:

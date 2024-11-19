@@ -167,7 +167,7 @@ def handle_send_message(data):
     print(encrypted_message)
     username = data['username']
     room = data['room']
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username}, to=room, include_self=False)
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 'room': room}, to=room, include_self=False)
     #add_message(1, 2, encrypted_message)
 
 
