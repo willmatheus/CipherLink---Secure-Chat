@@ -3,6 +3,7 @@ import requests
 import socketio
 from utils import *
 from flask_socketio import leave_room
+from datetime import datetime, timedelta
 
 
 # Inicializando o cliente SocketIO
@@ -108,14 +109,16 @@ def on_receive_session_key(data):
         session_keys[room] = session_key
 
 
-def send_message(username, user_to_talk, message, room):
+def send_message(username, user_to_talk, message, room, timestamp):
     # Envia a mensagem criptografada
     encrypted_message = encrypt_chacha20_message(session_keys[room], message)
     sio.emit('send_message', {
         'username': username,
         'user_to_talk': user_to_talk,
         'encrypted_message': encrypted_message,
-        'room': room
+        'room': room,
+        'timestamp': timestamp
+
     })
 
 
@@ -125,8 +128,9 @@ def on_receive_message(data):
     encrypted_message = data['encrypted_message']
     username = data['username']
     room = data['room']
+    timestamp = data['timestamp']
     decrypted_message = decrypt_chacha20_message(session_keys[room], encrypted_message)
-    print(f"{username}:", decrypted_message)
+    print(f"{timestamp} {username}:", decrypted_message)
 
 
 # ---------- User Functions -------------
@@ -192,19 +196,22 @@ def chat_with_user(username, user_to_talk, room):
     get_message_history(username, room)
 
     while True:
-        message = input("Você: ")
+        message = input()
+        timestamp = datetime.now().strftime("(%a, %d %b %Y %H:%M:%S GMT)")
         if message.lower() == "sair":
             print("Voltando ao menu principal.")
             leave_room(room)
             break
-        send_message(username, user_to_talk, message, room)
+        print(f"\n{timestamp} Você: {message}")
+        #print(f"\nVocê: {message}")
+        send_message(username, user_to_talk, message, room, timestamp)
 
 
 def main_menu(username):
     while True:
         print("\n╔═════════════════╗")
-        print("  CipherLink Chat")
-        print("╚═════════════════╝")
+        print(  "  CipherLink Chat"  )
+        print(  "╚═════════════════╝")
         print("1 - Adicionar um usuario")
         print("2 - Conversar com um usuario na sua lista de amigos")
         print("3 - Sair do programa")

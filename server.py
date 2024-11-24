@@ -21,14 +21,15 @@ socketio = SocketIO(app)
 
 
 # FUNCTIONS FOR TEST ####################################
-def add_message(sender_id, recipient_id, content, room, duration_seconds=30000):
+def add_message(sender_id, recipient_id, content, room, duration_seconds=30000, timestamp=datetime.now()):
     with app.app_context():
         new_message = Message(
             sender_id=sender_id,
             recipient_id=recipient_id,
             content=content,
             room_id=room,
-            duration=timedelta(seconds=duration_seconds)  # Duração da mensagem
+            duration=timedelta(seconds=duration_seconds),  # Duração da mensagem
+            timestamp=timestamp
         )
         db.session.add(new_message)
         db.session.commit()
@@ -200,10 +201,12 @@ def handle_send_message(data):
     username = data['username']
     user_to_talk = data['user_to_talk']
     room = data['room']
+    timestamp = data['timestamp']
     sender_id, recipient_id = extract_user_ids(username, user_to_talk)
-    add_message(sender_id, recipient_id, encrypted_message, room)
+    add_message(sender_id, recipient_id, encrypted_message, room, timestamp=timestamp)
     print(f"Message added: {encrypted_message}")
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 'room': room},
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 
+                             'room': room, 'timestamp': timestamp},
          to=room, include_self=False)
 
 
