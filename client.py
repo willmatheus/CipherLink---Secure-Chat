@@ -66,11 +66,14 @@ def get_message_history(username, room):
     response = requests.get(f'http://localhost:5000/messages/{username}/{room}')
     if response.ok:
         message_history = response.json().get("history_messages", [])
+        message_senders = response.json().get("message_senders", [])
+        message_timestamps = response.json().get("message_timestamps", [])
         if not message_history:
             print("Sem historico de mensagens")
         else:
-            for message in message_history:
-                print(decrypt_chacha20_message(session_keys[room], message))
+            for message, sender_username, timestamp in zip(message_history, message_senders, message_timestamps):
+                print(f"({timestamp}) {"Voce" if sender_username == username else sender_username}: {
+                    decrypt_chacha20_message(session_keys[room], message)}")
     else:
         print(f"Erro ao obter o historico de mensagens")
 
@@ -95,7 +98,6 @@ def on_receive_session_key(data):
     encrypted_session_key = data['encrypted_session_key']
     room = data['room']
     file_path = f"session_keys/{room}_session_key.bin"
-    print(not os.path.isfile(file_path))
     if not os.path.isfile(file_path):
         session_keys[room] = decrypt_with_private_key(encrypted_session_key, global_private_key)
         encrypted_session_key = encrypt_session_key(session_keys[room], room)
@@ -104,7 +106,6 @@ def on_receive_session_key(data):
         session_key_encrypted = recover_session_key(room)
         session_key = decrypt_session_key(session_key_encrypted, room)
         session_keys[room] = session_key
-        print(f"Depois: {session_keys}")
 
 
 def send_message(username, user_to_talk, message, room):
@@ -166,14 +167,11 @@ def login_user(username, password):
         'username': username,
         'password': password,
     })
-
     if response.ok:
         private_key_encrypted = recover_private_key(username)
         private_key = decrypt_private_key(private_key_encrypted, password)
-
         print("DEBUG: Chave privada recuperada")
         print("\nLogin bem-sucedido!")
-        print("Mensagens offline:", response.json().get('offline_messages', []))
         global global_private_key
         global_private_key = private_key
         return True, private_key

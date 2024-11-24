@@ -217,36 +217,3 @@ def recover_session_key(room):
     except (OSError, pickle.PickleError) as e:
         print(f"Erro ao abrir a session key criptografada: {e}")
         return False
-
-
-def save_session_key_server_side(encrypted_data, room):
-    # Sem alterações.
-    filename = f"{room}_session_key.bin"
-    file_path = f"session_keys/{filename}"
-    try:
-        directory = os.path.dirname(file_path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
-
-        with open(file_path, "wb") as f:
-            pickle.dump(encrypted_data, f)
-
-        print("DEBUG: A session key foi armazenada do lado do cliente.")
-        return True
-
-    except (OSError, pickle.PickleError) as e:
-        print(f"Erro ao salvar a session key criptografada: {e}")
-        return False
-
-
-def recover_session_key_server_side(room):
-    try:
-        filename = f"{room}_session_key.bin"
-        file_path = f"session_keys/{filename}"
-        with open(file_path, "rb") as f:
-            loaded_encrypted_data = pickle.load(f)
-        return loaded_encrypted_data
-
-    except (OSError, pickle.PickleError) as e:
-        print(f"Erro ao abrir a session key criptografada: {e}")
-        return False

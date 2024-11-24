@@ -30,5 +30,8 @@ class Message(db.Model):
     def get_content(self):
         return self.content
 
+    def get_timestamp(self):
+        return self.timestamp
+
     def __repr__(self):
         return f'<Message {self.id} from User {self.sender_id} to User {self.recipient_id}>'

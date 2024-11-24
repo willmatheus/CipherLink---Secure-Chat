@@ -8,7 +8,6 @@ from message_models import Message
 from session_model import Session
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
-from apscheduler.schedulers.background import BackgroundScheduler
 from config import *
 
 load_dotenv()
@@ -19,9 +18,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 migrate = Migrate(app, db)
 socketio = SocketIO(app)
-
-# Armazenamento de sessões
-session_keys = {}
 
 
 # FUNCTIONS FOR TEST ####################################
@@ -96,31 +92,32 @@ def login():
     user = User.query.filter_by(username=username).first()
 
     if user and check_password_hash(user.get_password_hashed(), password):
-        offline_messages = update_offline_messages(user.id)
-        return jsonify({'message': 'Login successful', 'username': username, 'offline_messages': offline_messages}), 200
+        return jsonify({'message': 'Login successful', 'username': username}), 200
     return jsonify({'message': 'Invalid credentials'}), 401
 
 
 @app.route('/messages/<username>/<room>', methods=['GET'])
 def get_message_history(username, room):
     user_id = User.query.filter_by(username=username).first().get_user_id()
-    history_messages = (Message.query.filter_by(room_id=room)
-                        .order_by(Message.timestamp.asc()).all())
-    result = [message.get_content() for message in history_messages]
+
     if user_id is None:
         return jsonify({"message": "user not founded"}), 401
-    return jsonify({"message": "public key successfully achieved", "history_messages": result}), 200
+    history_messages = (Message.query.filter_by(room_id=room)
+                        .order_by(Message.timestamp.asc()).all())
+    message_contents = [message.get_content() for message in history_messages]
+    message_senders = [message.sender.get_username() for message in history_messages]
+    message_timestamps = [message.get_timestamp()for message in history_messages]
+
+    return jsonify({"message": "Message history successfully recovered",
+                    "history_messages": message_contents,
+                    'message_senders': message_senders,
+                    'message_timestamps': message_timestamps}), 200
 
 
 # ---------- Chat Functions -------------
 
-def update_offline_messages(sender_id):
-    msgs = Message.query.filter_by(sender_id=sender_id).values()
-    return [msg.to_dict() for msg in msgs]
-
 
 # ---------- User Routes -------------
-
 @app.route('/user', methods=['POST'])
 def add_user_in_friendlist():
     username = request.json['username']
@@ -172,7 +169,20 @@ def get_friend_list(username):
     return jsonify({"message": "User not found"}), 404
 
 
-# Rota para troca de chave de sessão ChaCha20
+# ---------- Chat Events Functions -------------
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    join_room(room)
+    session = Session.query.filter_by(room_name=room).first()
+    if not session:
+        emit('generate_session_key', {'room': room})
+    else:
+        encrypted_session_key = session.get_session_key()
+        print(encrypted_session_key)
+        emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
+
+
 @socketio.on('send_session_key')
 def handle_session_key(data):
     room = data['room']
@@ -195,19 +205,6 @@ def handle_send_message(data):
     print(f"Message added: {encrypted_message}")
     emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 'room': room},
          to=room, include_self=False)
-
-
-@socketio.on('join')
-def on_join(data):
-    room = data['room']
-    join_room(room)
-    session = Session.query.filter_by(room_name=room).first()
-    if not session:
-        emit('generate_session_key', {'room': room})
-    else:
-        encrypted_session_key = session.get_session_key()
-        print(encrypted_session_key)
-        emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
 
 
 """
