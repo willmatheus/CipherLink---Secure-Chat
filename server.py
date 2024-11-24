@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from user_models import User
 from message_models import Message
+from session_model import Session
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -21,16 +22,16 @@ socketio = SocketIO(app)
 
 # Armazenamento de sessões
 session_keys = {}
-clients = {}
 
 
 # FUNCTIONS FOR TEST ####################################
-def add_message(sender_id, recipient_id, content, duration_seconds=40):
+def add_message(sender_id, recipient_id, content, room, duration_seconds=30000):
     with app.app_context():
         new_message = Message(
             sender_id=sender_id,
             recipient_id=recipient_id,
             content=content,
+            room_id=room,
             duration=timedelta(seconds=duration_seconds)  # Duração da mensagem
         )
         db.session.add(new_message)
@@ -45,9 +46,15 @@ def add_user(username, password_hash, public_key):
         return new_user.id
 
 
+def extract_user_ids(user_sender, user_recipient):
+    sender = User.query.filter_by(username=user_sender).first().get_user_id()
+    recipient = User.query.filter_by(username=user_recipient).first().get_user_id()
+    return sender, recipient
+
+
 ######################################################
 
-
+"""
 def clean_expired_messages():
     with app.app_context():
         now = datetime.now(timezone.utc)
@@ -60,9 +67,11 @@ def clean_expired_messages():
             db.session.delete(message)
 
         db.session.commit()
+"""
 
 
 # ---------- User Authentication Routes -------------
+
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -92,6 +101,17 @@ def login():
     return jsonify({'message': 'Invalid credentials'}), 401
 
 
+@app.route('/messages/<username>/<room>', methods=['GET'])
+def get_message_history(username, room):
+    user_id = User.query.filter_by(username=username).first().get_user_id()
+    history_messages = (Message.query.filter_by(room_id=room)
+                        .order_by(Message.timestamp.asc()).all())
+    result = [message.get_content() for message in history_messages]
+    if user_id is None:
+        return jsonify({"message": "user not founded"}), 401
+    return jsonify({"message": "public key successfully achieved", "history_messages": result}), 200
+
+
 # ---------- Chat Functions -------------
 
 def update_offline_messages(sender_id):
@@ -118,7 +138,7 @@ def add_user_in_friendlist():
 @app.route('/all_users', methods=['GET'])
 def get_all_users():
     users = User.query.all()
-    all_usernames = [user.username for user in users]
+    all_usernames = [user.get_username() for user in users]
     return jsonify({"users": all_usernames}), 200
 
 
@@ -128,6 +148,7 @@ def get_user_public_key(username):
     if user_public_key:
         return jsonify({"message": "public key successfully achieved", "user_public_key": user_public_key}), 200
     return jsonify({"message": "public key not founded"}), 401
+
 
 # ---------- Friendlist Routes -------------
 
@@ -156,39 +177,44 @@ def get_friend_list(username):
 def handle_session_key(data):
     room = data['room']
     encrypted_session_key = data['encrypted_session_key']
-    print(encrypted_session_key)
-    session_keys[room] = encrypted_session_key
-    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room}, to=room, include_self=False)
+    session = Session(room_name=room, session_key=encrypted_session_key)
+    db.session.add(session)
+    db.session.commit()
+    emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room},
+         to=room, include_self=False)
 
 
 @socketio.on('send_message')
 def handle_send_message(data):
     encrypted_message = data['encrypted_message']
-    print(encrypted_message)
     username = data['username']
+    user_to_talk = data['user_to_talk']
     room = data['room']
-    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 'room': room}, to=room, include_self=False)
-    #add_message(1, 2, encrypted_message)
+    sender_id, recipient_id = extract_user_ids(username, user_to_talk)
+    add_message(sender_id, recipient_id, encrypted_message, room)
+    print(f"Message added: {encrypted_message}")
+    emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 'room': room},
+         to=room, include_self=False)
 
 
 @socketio.on('join')
 def on_join(data):
     room = data['room']
-    username = data['username']
-
     join_room(room)
-    if room not in session_keys:
-        clients[room] = username
+    session = Session.query.filter_by(room_name=room).first()
+    if not session:
         emit('generate_session_key', {'room': room})
     else:
-        encrypted_session_key = session_keys[room]
-        print(session_keys[room])
+        encrypted_session_key = session.get_session_key()
+        print(encrypted_session_key)
         emit('receive_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
 
 
+"""
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=clean_expired_messages, trigger="interval", seconds=20)  # Limpa a cada 20 segundos
 scheduler.start()
+"""
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

@@ -10,14 +10,17 @@ class User(db.Model):
     # Campo para armazenar os amigos como uma string delimitada por vírgula
     friend_list = db.Column(db.Text, default='')
 
+    def get_user_id(self):
+        return self.id
+
+    def get_username(self):
+        return self.username
+
     def get_password_hashed(self):
         return self.password_hash
 
     def get_public_key(self):
         return self.public_key
-
-    def get_username(self):
-        return self.username
 
     def get_friend_list(self):
         # Converte a string em uma lista ao recuperar

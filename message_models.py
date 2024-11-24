@@ -8,7 +8,8 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Remetente
     recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Destinatário
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    room_id = db.Column(db.String(80), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.now())
     duration = db.Column(db.Interval, nullable=False, default=lambda: timedelta(seconds=50))  # Duração padrão
 
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
@@ -25,6 +26,9 @@ class Message(db.Model):
             'sender_username': self.sender.username if self.sender else None,
             'recipient_username': self.recipient.username if self.recipient else None,
         }
+
+    def get_content(self):
+        return self.content
 
     def __repr__(self):
         return f'<Message {self.id} from User {self.sender_id} to User {self.recipient_id}>'

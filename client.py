@@ -1,3 +1,4 @@
+import os
 import requests
 import socketio
 from utils import *
@@ -7,12 +8,9 @@ from flask_socketio import leave_room
 # Inicializando o cliente SocketIO
 sio = socketio.Client()
 
-message_history = []
 global global_private_key
 session_keys = {}
 public_keys = {}
-global_username = None
-global_password = None
 
 
 # ---------- Friendlist Functions -------------
@@ -64,6 +62,19 @@ def request_user_public_key(username_to_talk, room):
 # ---------- Chat Functions -------------
 # Disparar evento de início de sessão via SocketIO
 
+def get_message_history(username, room):
+    response = requests.get(f'http://localhost:5000/messages/{username}/{room}')
+    if response.ok:
+        message_history = response.json().get("history_messages", [])
+        if not message_history:
+            print("Sem historico de mensagens")
+        else:
+            for message in message_history:
+                print(decrypt_chacha20_message(session_keys[room], message))
+    else:
+        print(f"Erro ao obter o historico de mensagens")
+
+
 def join(username, room):
     sio.emit('join', {'room': room, 'username': username})
 
@@ -72,8 +83,10 @@ def join(username, room):
 def generate_session_key(data):
     room = data['room']
     session_keys[room] = os.urandom(32)
-    encrypted_session_key = encrypt_with_public_key(session_keys[room], public_keys[room])
-    sio.emit('send_session_key', {'encrypted_session_key': encrypted_session_key, 'room': room})
+    encrypted_session_key = encrypt_session_key(session_keys[room], room)
+    save_session_key(encrypted_session_key, room)
+    encrypted_session_key_with_public_key = encrypt_with_public_key(session_keys[room], public_keys[room])
+    sio.emit('send_session_key', {'encrypted_session_key': encrypted_session_key_with_public_key, 'room': room})
 
 
 # Callback para recebimento da chave de sessão
@@ -81,16 +94,25 @@ def generate_session_key(data):
 def on_receive_session_key(data):
     encrypted_session_key = data['encrypted_session_key']
     room = data['room']
-    session_keys[room] = decrypt_with_private_key(encrypted_session_key, global_private_key)
-    if room not in session_keys:
-        session_keys[room] = encrypted_session_key
+    file_path = f"session_keys/{room}_session_key.bin"
+    print(not os.path.isfile(file_path))
+    if not os.path.isfile(file_path):
+        session_keys[room] = decrypt_with_private_key(encrypted_session_key, global_private_key)
+        encrypted_session_key = encrypt_session_key(session_keys[room], room)
+        save_session_key(encrypted_session_key, room)
+    else:
+        session_key_encrypted = recover_session_key(room)
+        session_key = decrypt_session_key(session_key_encrypted, room)
+        session_keys[room] = session_key
+        print(f"Depois: {session_keys}")
 
 
-def send_message(username, message, room):
+def send_message(username, user_to_talk, message, room):
     # Envia a mensagem criptografada
     encrypted_message = encrypt_chacha20_message(session_keys[room], message)
     sio.emit('send_message', {
         'username': username,
+        'user_to_talk': user_to_talk,
         'encrypted_message': encrypted_message,
         'room': room
     })
@@ -169,6 +191,7 @@ def chat_with_user(username, user_to_talk, room):
     print(f" Chat com {user_to_talk}")
     print("╚═════════════════╝")
     print("Digite 'sair' para voltar ao menu principal.\n")
+    get_message_history(username, room)
 
     while True:
         message = input("Você: ")
@@ -176,7 +199,7 @@ def chat_with_user(username, user_to_talk, room):
             print("Voltando ao menu principal.")
             leave_room(room)
             break
-        send_message(username, message, room)
+        send_message(username, user_to_talk, message, room)
 
 
 def main_menu(username):
