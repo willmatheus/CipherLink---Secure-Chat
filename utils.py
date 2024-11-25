@@ -1,5 +1,6 @@
 import pickle
-
+import qrcode
+from PIL import Image
 from Crypto.PublicKey import RSA
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -217,3 +218,29 @@ def recover_session_key(room):
     except (OSError, pickle.PickleError) as e:
         print(f"Erro ao abrir a session key criptografada: {e}")
         return False
+
+
+def display_totp_qr_code(totp_uri):
+    """
+    Exibe um QR Code baseado no URI TOTP fornecido.
+    """
+    try:
+        # Gerar o QR Code
+        qr = qrcode.QRCode(
+            version=1,  # Tamanho do QR Code
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(totp_uri)
+        qr.make(fit=True)
+
+        # Criar imagem do QR Code
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Mostrar o QR Code para o usuário
+        img.show()
+        print("QR Code exibido com sucesso.")
+
+    except Exception as e:
+        print(f"Erro ao exibir o QR Code: {e}")

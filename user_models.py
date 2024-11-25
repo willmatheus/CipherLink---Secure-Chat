@@ -1,3 +1,4 @@
+import pyotp
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import db
 
@@ -9,6 +10,7 @@ class User(db.Model):
     public_key = db.Column(db.Text, nullable=False)
     # Campo para armazenar os amigos como uma string delimitada por vírgula
     friend_list = db.Column(db.Text, default='')
+    totp_secret = db.Column(db.Text, nullable=False, default=lambda: pyotp.random_base32())
 
     def get_user_id(self):
         return self.id
@@ -41,3 +43,13 @@ class User(db.Model):
 
     def is_user_in_friendlist(self, username):
         return username in self.get_friend_list()
+
+    # Função para gerar o QR Code ou o token TOTP
+    def get_totp_uri(self):
+        return pyotp.totp.TOTP(self.totp_secret).provisioning_uri(
+            self.username, issuer_name="CypherLink"
+        )
+
+    def verify_totp(self, token):
+        totp = pyotp.TOTP(self.totp_secret)
+        return totp.verify(token)

@@ -1,4 +1,3 @@
-import os
 import requests
 import socketio
 from utils import *
@@ -150,32 +149,29 @@ def register_user(username, password):
     private_key, public_key = generate_keypair()
     global global_private_key
     global_private_key = private_key
-
-    print("\nDEBUG: Chaves geradas:")
-    # print(f"DEBUG: Chave publica: {public_key.decode()}")
-    # print(f"DEBUG: Chave privada: {private_key.decode()}")
-
     response = requests.post('http://localhost:5000/register', json={
         'username': username,
         'password': password,
         'public_key': public_key.decode()
     })
+    totp_uri = response.json().get('totp_uri')
+    print('Escaneie o QR code com seu app de autenticacao para obter o codigo TOTP')
+    display_totp_qr_code(totp_uri)
     encrypted_data = encrypt_private_key(private_key, password)
-    print("DEBUG: Chave privada criptografada")
     save_private_key(username=username, encrypted_data=encrypted_data)
     return response.ok
 
 
 def login_user(username, password):
+    totp_token = input("Insira o código TOTP gerado pelo seu app de autenticação: ")
     response = requests.post('http://localhost:5000/login', json={
         'username': username,
         'password': password,
+        'totp_token': totp_token
     })
     if response.ok:
         private_key_encrypted = recover_private_key(username)
         private_key = decrypt_private_key(private_key_encrypted, password)
-        print("DEBUG: Chave privada recuperada")
-        print("\nLogin bem-sucedido!")
         global global_private_key
         global_private_key = private_key
         return True, private_key
@@ -310,6 +306,8 @@ def run_chat():
                 print("Cadastro realizado com sucesso!")
                 main_menu(username)
                 break  # Sai do loop após o registro e chamada do menu principal
+            else:
+                print("Codigo TOTP incorreto, tente novamente!")
 
         # Login
         elif option == 'l':

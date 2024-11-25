@@ -83,18 +83,26 @@ def register():
     db.session.add(user)
     db.session.commit()
     print(f"\nDEBUG: Chave publica: {public_key}")
-    return jsonify({'message': 'User registered successfully'}), 201
+    return jsonify({
+        'message': 'User registered successfully',
+        'totp_uri': user.get_totp_uri()
+    }), 201
 
 
 @app.route('/login', methods=['POST'])
 def login():
     username = request.json['username']
     password = request.json['password']
-    user = User.query.filter_by(username=username).first()
+    totp_token = request.json['totp_token']
 
-    if user and check_password_hash(user.get_password_hashed(), password):
-        return jsonify({'message': 'Login successful', 'username': username}), 200
-    return jsonify({'message': 'Invalid credentials'}), 401
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.get_password_hashed(), password):
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    if not user.verify_totp(totp_token):
+        return jsonify({'message': 'Invalid TOTP token'}), 401
+
+    return jsonify({'message': 'Login successful', 'username': username}), 200
 
 
 @app.route('/messages/<username>/<room>', methods=['GET'])
@@ -206,8 +214,7 @@ def handle_send_message(data):
     add_message(sender_id, recipient_id, encrypted_message, room, timestamp=timestamp)
     print(f"Message added: {encrypted_message}")
     emit('receive_message', {'encrypted_message': encrypted_message, 'username': username, 
-                             'room': room, 'timestamp': timestamp},
-         to=room, include_self=False)
+                    'room': room, 'timestamp': timestamp}, to=room, include_self=False)
 
 
 """
